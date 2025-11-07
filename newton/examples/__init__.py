@@ -286,6 +286,40 @@ def create_parser():
         choices=["gl", "usd", "rerun", "null"],
         help="Viewer to use (gl, usd, rerun, or null).",
     )
+
+    # Rerun viewer options
+    rerun_group = parser.add_argument_group("rerun viewer options")
+    rerun_group.add_argument(
+        "--rerun-connect-url",
+        type=str,
+        default=None,
+        help="Connect to external Rerun server (e.g., 'rerun+http://127.0.0.1:9023/proxy' See Rerun CLI manual for more details). Omit to start local server.",
+    )
+    rerun_group.add_argument(
+        "--rerun-web-port",
+        type=int,
+        default=None,
+        help="Custom web port for Rerun server (useful to avoid port conflicts).",
+    )
+    rerun_group.add_argument(
+        "--rerun-grpc-port",
+        type=int,
+        default=None,
+        help="Custom gRPC port for Rerun server (useful to avoid port conflicts).",
+    )
+    rerun_group.add_argument(
+        "--rerun-launch-web",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Launch Rerun web viewer.",
+    )
+    rerun_group.add_argument(
+        "--rerun-app-id",
+        type=str,
+        default=None,
+        help="Application ID for Rerun recording (e.g., 'my_simulation').",
+    )
+
     parser.add_argument(
         "--output-path", type=str, default="output.usd", help="Path to the output USD file (required for usd viewer)."
     )
@@ -343,7 +377,16 @@ def init(parser=None):
             raise ValueError("--output-path is required when using usd viewer")
         viewer = newton.viewer.ViewerUSD(output_path=args.output_path, num_frames=args.num_frames)
     elif args.viewer == "rerun":
-        viewer = newton.viewer.ViewerRerun()
+        # If connect URL is provided, use client mode (server=False)
+        server = args.rerun_connect_url is None
+        viewer = newton.viewer.ViewerRerun(
+            server=server,
+            grpc_port=args.rerun_grpc_port,
+            web_port=args.rerun_web_port,
+            address=args.rerun_connect_url,
+            launch_viewer=args.rerun_launch_web,
+            app_id=args.rerun_app_id,
+        )
     elif args.viewer == "null":
         viewer = newton.viewer.ViewerNull(num_frames=args.num_frames)
     else:

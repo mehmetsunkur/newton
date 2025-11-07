@@ -39,7 +39,9 @@ class ViewerRerun(ViewerBase):
     def __init__(
         self,
         server: bool = True,
-        address: str = "127.0.0.1:9876",
+        grpc_port: int | None = None,
+        web_port: int | None = None,
+        address: str | None = None,
         launch_viewer: bool = True,
         app_id: str | None = None,
     ):
@@ -69,11 +71,14 @@ class ViewerRerun(ViewerBase):
 
         # Set up connection based on mode
         if self.server:
-            server_uri = rr.serve_grpc()
+            server_uri = rr.serve_grpc(grpc_port=grpc_port)
+        else:
+            server_uri = address
+            rr.connect_grpc(url=server_uri)
 
         # Optionally launch viewer client
         if self.launch_viewer:
-            rr.serve_web_viewer(connect_to=server_uri)
+            rr.serve_web_viewer(web_port=web_port, connect_to=server_uri)
 
         # Store mesh data for instances
         self._meshes = {}
@@ -130,6 +135,12 @@ class ViewerRerun(ViewerBase):
             vertex_normals=self._meshes[name]["normals"],
         )
 
+        # if hidden:
+        #     rr.log(name, rr.Clear(recursive=False))  # ← Simple and effective
+        # else:
+        #     rr.log(name, mesh_3d, static=True)
+
+        # rr.log(name, rr.Clear(recursive=False))  # ← Simple and effective
         rr.log(name, mesh_3d, static=True)
 
     @override

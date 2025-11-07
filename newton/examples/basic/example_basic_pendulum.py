@@ -29,6 +29,9 @@ import newton
 import newton.examples
 
 
+# uv run newton/examples/basic/example_basic_pendulum.py --viewer rerun
+
+
 class Example:
     def __init__(self, viewer):
         # setup simulation parameters first
