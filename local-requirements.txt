@@ -1,0 +1,8 @@
+mujoco-py
+pyglet
+usd-core
+GitPython
+trimesh
+git+https://github.com/google-deepmind/mujoco_warp.git
+pycollada
+scipy

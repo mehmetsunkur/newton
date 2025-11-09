@@ -32,9 +32,54 @@ import warp as wp
 import newton
 import newton.examples
 
+import glob
+import os
+
+def get_elite_files(elite_dir="/workspace/uol/CM3020-AI/midterm/cw-study-1/src/elits"):
+    """
+    Get all elite_*.csv files from the specified directory.
+
+    Args:
+        elite_dir: Directory containing elite CSV files
+
+    Returns:
+        List of paths to elite CSV files, sorted by elite number
+    """
+    pattern = os.path.join(elite_dir, "elite_*.csv")
+    files = glob.glob(pattern)
+    # Sort files by the elite number
+    files.sort(key=lambda x: int(os.path.basename(x).replace("elite_", "").replace(".csv", "")))
+    return files
+
+def build_creature(dna_path:str):
+    quadruped = newton.ModelBuilder()
+    # set default parameters for the quadruped
+    quadruped.default_body_armature = 0.01
+    quadruped.default_joint_cfg.armature = 0.01
+    quadruped.default_joint_cfg.mode = newton.JointMode.TARGET_POSITION
+    quadruped.default_joint_cfg.target_ke = 2000.0
+    quadruped.default_joint_cfg.target_kd = 1.0
+    quadruped.default_shape_cfg.ke = 1.0e4
+    quadruped.default_shape_cfg.kd = 1.0e2
+    quadruped.default_shape_cfg.kf = 1.0e2
+    quadruped.default_shape_cfg.mu = 1.0
+    # generate a random creature
+    cr = creature.Creature(gene_count=gene_count)
+    cr.update_dna(dna=genome.Genome.from_csv(dna_path))
+
+    # parse the URDF file
+    quadruped.add_urdf(
+        # newton.examples.get_asset("quadruped.urdf"),
+        newton.examples.get_asset("creature.urdf"),
+        xform=wp.transform(wp.vec3(0.0, 0.0, 0.7), wp.quat_identity()),
+        floating=True,
+        enable_self_collisions=False
+    )
+
+
 
 class Example:
-    def __init__(self, viewer, num_worlds):
+    def __init__(self, viewer):
         # setup simulation parameters first
         self.fps = 100
         self.frame_dt = 1.0 / self.fps
@@ -42,7 +87,10 @@ class Example:
         self.sim_substeps = 10
         self.sim_dt = self.frame_dt / self.sim_substeps
 
-        self.num_worlds = num_worlds
+        # self.num_worlds = num_worlds
+
+        elite_files = get_elite_files()[990:]
+        print(f"Found {len(elite_files)} elite creatures to load")
 
         self.viewer = viewer
 
@@ -61,10 +109,11 @@ class Example:
 
         # parse the URDF file
         quadruped.add_urdf(
-            newton.examples.get_asset("quadruped.urdf"),
+            # newton.examples.get_asset("quadruped.urdf"),
+            newton.examples.get_asset("creature.urdf"),
             xform=wp.transform(wp.vec3(0.0, 0.0, 0.7), wp.quat_identity()),
             floating=True,
-            enable_self_collisions=False,
+            enable_self_collisions=False
         )
 
         # set initial joint positions
@@ -75,13 +124,15 @@ class Example:
         scene = newton.ModelBuilder()
 
         # use the builder.replicate() function to create N copies of the world
-        scene.replicate(quadruped, self.num_worlds)
+        # scene.replicate(quadruped, self.num_worlds)
+        scene.add_builder(quadruped)
         scene.add_ground_plane()
 
         # finalize model
         self.model = scene.finalize()
 
-        self.solver = newton.solvers.SolverXPBD(self.model)
+        # self.solver = newton.solvers.SolverXPBD(self.model)
+        self.solver = newton.solvers.SolverMuJoCo(self.model)
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
@@ -152,13 +203,16 @@ class Example:
 
 if __name__ == "__main__":
     # Create parser that inherits common arguments and adds example-specific ones
-    parser = newton.examples.create_parser()
-    parser.add_argument("--num-worlds", type=int, default=1, help="Total number of simulated worlds.")
 
-    # Parse arguments and initialize viewer
-    viewer, args = newton.examples.init(parser)
+    import os
+    app_id,_ = os.path.splitext(os.path.basename(__file__))
+    parser = newton.examples.create_parser()
+    parser.add_argument("--num-worlds", type=int, default=10, help="Total number of simulated worlds.")
+    parser.add_argument("--app-id", type=str, default=app_id, help="Application if for data tagging")
+
+    viewer, args = newton.examples.init(parser=parser)
 
     # Create viewer and run
-    example = Example(viewer, args.num_worlds)
+    example = Example(viewer)
 
     newton.examples.run(example, args)

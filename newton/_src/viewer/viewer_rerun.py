@@ -21,8 +21,11 @@ import warp as wp
 from ..core.types import override
 from .viewer import ViewerBase
 
+from numpy.random import default_rng
+
 try:
     import rerun as rr
+    import rerun.blueprint as rrb
 except ImportError:
     rr = None
 
@@ -65,15 +68,15 @@ class ViewerRerun(ViewerBase):
         self._viewer_process = None
 
         # Initialize rerun
-        rr.init(self.app_id)
+        rr.init(self.app_id,spawn=True)
 
         # Set up connection based on mode
-        if self.server:
-            server_uri = rr.serve_grpc()
+        # if self.server:
+            # server_uri = rr.serve_grpc()
 
         # Optionally launch viewer client
-        if self.launch_viewer:
-            rr.serve_web_viewer(connect_to=server_uri)
+        # if self.launch_viewer:
+            # rr.serve_web_viewer(connect_to=server_uri)
 
         # Store mesh data for instances
         self._meshes = {}
@@ -121,6 +124,7 @@ class ViewerRerun(ViewerBase):
             "indices": indices_np,
             "normals": (normals.numpy().astype(np.float32) if normals is not None else None),
             "uvs": uvs.numpy().astype(np.float32) if uvs is not None else None,
+            "hidden": hidden
         }
 
         # Log the mesh as a static asset
@@ -129,8 +133,75 @@ class ViewerRerun(ViewerBase):
             triangle_indices=indices_np,
             vertex_normals=self._meshes[name]["normals"],
         )
+        
+        rr.send_blueprint(
+            rrb.Spatial3DView(
+                overrides={
+                    "/geometry/plane_6": rrb.EntityBehavior(visible=False),
+                    name: rrb.EntityBehavior(visible=False),
+                    # "/geometry/plane_6": rrb.EntityBehavior(interactive=False),
+                }
+            )
+        )
+        # rrb.Blueprint(rrb.Spatial3DView)
+        if(hidden):
+            # rr.log(name, rr.Clear(recursive=True), static=True)
+            rr.log(name, mesh_3d, static=True)
+        else:
+            rr.log(name, mesh_3d, static=True)
+        
+        # Create some random points.
+        rng = default_rng(12345)
+        positions = rng.uniform(-5, 5, size=[50, 3])
+        colors = rng.uniform(0, 255, size=[50, 3])
+        radii = rng.uniform(0.1, 0.5, size=[50])
 
-        rr.log(name, mesh_3d, static=True)
+        rr.log("points", rr.Points3D(positions, colors=colors, radii=radii))
+        rr.log("box", rr.Boxes3D(half_sizes=[5, 5, 5], colors=0))
+
+        # Create a Spatial3D view to display the points.
+        three_dv = rrb.Spatial3DView(
+                origin="/",
+                name="3D Scene",
+                # Set the background color to light blue.
+                background=[100, 149, 237],                
+                overrides={
+                    name: rrb.EntityBehavior(visible=False),
+                    "hidden_subtree/not_hidden": rrb.EntityBehavior(visible=True),
+                    "non_interactive_subtree": rrb.EntityBehavior(interactive=False),
+                },
+                # Configure the eye controls.
+                eye_controls=rrb.EyeControls3D(
+                    kind=rrb.Eye3DKind.FirstPerson,
+                    speed=20.0,
+                ))
+        # overrides = dict()
+        # visible_dict = dict()
+        # visible_dict["visible"] = False
+        # overrides[name] = visible_dict
+        # three_dv.overrides = overrides
+        blueprint = rrb.Blueprint(
+            three_dv,
+            rrb.TextLogView(origin="/log", name="Text Logs"),
+            collapse_panels=False,
+        )
+
+        
+        print("log_mesh", name, "hidden:", hidden)    
+
+        # rr.send_blueprint(blueprint)
+
+        # my_view = rrb.Spatial3DView(
+        #     name="My Hidden Entity View",
+        #     contents="/**", # Includes all
+        #     overrides={
+        #         "/world/other_entity": [rrb.archetypes.Visible(False)] # Set specific entity to invisible
+        #     }
+        # )
+
+        # rr.send_blueprint(rrb.Blueprint(my_view), default_blueprint=True)
+        
+        
 
     @override
     def log_instances(self, name, mesh, xforms, scales, colors, materials, hidden=False):

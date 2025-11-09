@@ -343,7 +343,7 @@ def init(parser=None):
             raise ValueError("--output-path is required when using usd viewer")
         viewer = newton.viewer.ViewerUSD(output_path=args.output_path, num_frames=args.num_frames)
     elif args.viewer == "rerun":
-        viewer = newton.viewer.ViewerRerun()
+        viewer = newton.viewer.ViewerRerun(app_id=args.app_id)
     elif args.viewer == "null":
         viewer = newton.viewer.ViewerNull(num_frames=args.num_frames)
     else:

@@ -156,8 +156,14 @@ class Example:
 
 if __name__ == "__main__":
     # Parse arguments and initialize viewer
-    viewer, args = newton.examples.init()
 
+    import os
+    app_id,_ = os.path.splitext(os.path.basename(__file__))
+    parser = newton.examples.create_parser()
+    parser.add_argument("--num-worlds", type=int, default=10, help="Total number of simulated worlds.")
+    parser.add_argument("--app-id", type=str, default=app_id, help="Application if for data tagging")
+
+    viewer, args = newton.examples.init(parser=parser)
     # Create viewer and run
     example = Example(viewer)
 
