@@ -23,8 +23,10 @@ from .viewer import ViewerBase
 
 try:
     import rerun as rr
+    import rerun.blueprint as rrb
 except ImportError:
     rr = None
+    rrb = None
 
 
 class ViewerRerun(ViewerBase):
@@ -57,6 +59,10 @@ class ViewerRerun(ViewerBase):
 
         super().__init__()
 
+        # Blueprint accumulation tracking
+        self._entity_visibility = {}
+        self._blueprint_applied = False
+
         self.server = server
         self.address = address
         self.launch_viewer = launch_viewer
@@ -65,7 +71,7 @@ class ViewerRerun(ViewerBase):
         self._viewer_process = None
 
         # Initialize rerun
-        rr.init(self.app_id)
+        rr.init(self.app_id, spawn=True)
 
         # Set up connection based on mode
         if self.server:
@@ -99,7 +105,7 @@ class ViewerRerun(ViewerBase):
             indices (wp.array): Triangle indices (wp.uint32).
             normals (wp.array, optional): Vertex normals (wp.vec3).
             uvs (wp.array, optional): UV coordinates (wp.vec2).
-            hidden (bool): Whether the mesh is hidden (unused).
+            hidden (bool): If True, mesh will be hidden in viewer.
             backface_culling (bool): Whether to enable backface culling (unused).
         """
         assert isinstance(points, wp.array)
@@ -132,6 +138,49 @@ class ViewerRerun(ViewerBase):
 
         rr.log(name, mesh_3d, static=True)
 
+        # Track visibility for blueprint
+        self._entity_visibility[name] = not hidden
+
+    def _apply_blueprint(self):
+        """Build and send Rerun blueprint with entity visibility settings.
+
+        Creates a blueprint with visibility overrides for all tracked entities
+        and sends it to the running Rerun viewer using rr.send_blueprint().
+
+        This can be called multiple times to update visibility dynamically.
+        """
+        # Build overrides dictionary from tracked visibility
+        overrides = {
+            path: rrb.EntityBehavior(visible=vis)
+            for path, vis in self._entity_visibility.items()
+        }
+
+        # Create blueprint with visibility overrides
+        blueprint = rrb.Blueprint(rrb.Spatial3DView(overrides=overrides))
+
+        # Send blueprint to running Rerun instance
+        rr.send_blueprint(blueprint)
+
+        # Mark as applied
+        self._blueprint_applied = True
+
+    @override
+    def set_model(self, model):
+        """Set the Newton model for visualization.
+
+        This populates all model geometry and applies the visibility blueprint.
+
+        Args:
+            model: Newton model to visualize
+        """
+        # Call parent to populate all model geometry
+        # This calls _populate_shapes() which logs all geometry
+        super().set_model(model)
+
+        # Apply blueprint after all model geometry is logged
+        if model is not None and not self._blueprint_applied:
+            self._apply_blueprint()
+
     @override
     def log_instances(self, name, mesh, xforms, scales, colors, materials, hidden=False):
         """
@@ -144,7 +193,7 @@ class ViewerRerun(ViewerBase):
             scales (wp.array): Instance scales (wp.vec3).
             colors (wp.array): Instance colors (wp.vec3).
             materials (wp.array): Instance materials (wp.vec4).
-            hidden (bool): Whether the instances are hidden. (unused)
+            hidden (bool): If True, instances will be hidden in viewer.
         """
         # Check that mesh exists
         if mesh not in self._meshes:
@@ -205,6 +254,9 @@ class ViewerRerun(ViewerBase):
 
             # Log the instance poses
             rr.log(name, instance_poses)
+
+        # Track visibility for blueprint
+        self._entity_visibility[name] = not hidden
 
     @override
     def begin_frame(self, time):
